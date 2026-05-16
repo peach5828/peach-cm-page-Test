@@ -1013,6 +1013,21 @@ textarea{
 
 
 <script>
+<script>
+
+const state = {
+  selectedBaseOption: null,
+  selectedAddonOptions: [],
+
+  currentSample: 0,
+  currentFace: 0,
+  currentStyle: 0
+};
+
+/* =========================
+   UTIL
+========================= */
+
 function preloadImages(list){
   list.forEach(src => {
     const img = new Image();
@@ -1025,244 +1040,459 @@ function formatPrice(price){
 }
 
 function replaceLineByPrefix(lines, prefix, newLine){
-  const idx = lines.findIndex(line => line.trimStart().startsWith(prefix));
-  if(idx !== -1){
-    lines[idx] = newLine;
+  const index = lines.findIndex(
+    line => line.trimStart().startsWith(prefix)
+  );
+
+  if(index !== -1){
+    lines[index] = newLine;
   }
+
   return lines;
 }
 
-let selectedBaseOption = null;
-let selectedAddonOptions = [];
+/* =========================
+   ELEMENT
+========================= */
+
+const elements = {
+  textarea: () => document.getElementById('inputText'),
+
+  summaryList: () => document.getElementById('selectionSummaryList'),
+
+  basePrice: () => document.getElementById('summaryBasePrice'),
+
+  addonPrice: () => document.getElementById('summaryAddonPrice'),
+
+  totalPrice: () => document.getElementById('summaryTotalPrice')
+};
+
+/* =========================
+   OPTION
+========================= */
 
 function getBaseOptionItems(){
-  return Array.from(document.querySelectorAll('.base-option-item'));
+  return [...document.querySelectorAll('.base-option-item')];
 }
 
 function findAddonElement(name){
-  return Array.from(document.querySelectorAll('.addon-item')).find(el => el.dataset.addonName === name) || null;
+  return [...document.querySelectorAll('.addon-item')]
+    .find(el => el.dataset.addonName === name) || null;
 }
 
 function setQtyValue(name, qty){
-  const el = Array.from(document.querySelectorAll('[data-qty-for]')).find(el => el.dataset.qtyFor === name);
-  if(el) el.textContent = String(qty);
+  const target = [...document.querySelectorAll('[data-qty-for]')]
+    .find(el => el.dataset.qtyFor === name);
+
+  if(target){
+    target.textContent = String(qty);
+  }
 }
 
 function hasFoldedArmSelected(){
-  return selectedAddonOptions.some(o => o.name === '추가 팔 파츠');
+  return state.selectedAddonOptions.some(
+    option => option.name === '추가 팔 파츠'
+  );
 }
 
 function requiresFoldedArm(name){
-  return name === '끌어안는 인형' || name === '마이크' || name === '게임기';
+  return ['끌어안는 인형', '마이크', '게임기']
+    .includes(name);
 }
 
 function enforceAddonRules(){
-  if(hasFoldedArmSelected()) return false;
 
-  const blocked = ['끌어안는 인형', '마이크', '게임기'];
-  let changed = false;
+  if(hasFoldedArmSelected()) return;
+
+  const blocked = [
+    '끌어안는 인형',
+    '마이크',
+    '게임기'
+  ];
 
   blocked.forEach(name => {
-    const idx = selectedAddonOptions.findIndex(o => o.name === name);
-    if(idx > -1){
-      selectedAddonOptions.splice(idx, 1);
-      const el = findAddonElement(name);
-      if(el) el.classList.remove('active');
-      changed = true;
+
+    const index = state.selectedAddonOptions.findIndex(
+      option => option.name === name
+    );
+
+    if(index > -1){
+
+      state.selectedAddonOptions.splice(index, 1);
+
+      const element = findAddonElement(name);
+
+      if(element){
+        element.classList.remove('active');
+      }
     }
   });
-
-  return changed;
 }
 
+/* =========================
+   SUMMARY
+========================= */
+
 function updateSelectionSummary(){
-  const list = document.getElementById('selectionSummaryList');
-  const basePriceEl = document.getElementById('summaryBasePrice');
-  const addonPriceEl = document.getElementById('summaryAddonPrice');
-  const totalPriceEl = document.getElementById('summaryTotalPrice');
+
+  const list = elements.summaryList();
+
+  const basePriceEl = elements.basePrice();
+
+  const addonPriceEl = elements.addonPrice();
+
+  const totalPriceEl = elements.totalPrice();
 
   list.innerHTML = '';
 
-  const baseTotal = selectedBaseOption ? selectedBaseOption.price : 0;
+  const baseTotal = state.selectedBaseOption
+    ? state.selectedBaseOption.price
+    : 0;
+
   let addonTotal = 0;
 
-  if(selectedBaseOption){
+  if(state.selectedBaseOption){
+
     const item = document.createElement('div');
+
     item.className = 'selection-summary-item';
+
     item.innerHTML = `
       <div class="left">
         <div class="name">패키지</div>
-        <div class="sub">${selectedBaseOption.name}</div>
+        <div class="sub">
+          ${state.selectedBaseOption.name}
+        </div>
       </div>
+
       <div class="right">
-        <strong>${formatPrice(selectedBaseOption.price)}원</strong>
+        <strong>
+          ${formatPrice(baseTotal)}원
+        </strong>
       </div>
     `;
+
     list.appendChild(item);
-    basePriceEl.textContent = `${formatPrice(selectedBaseOption.price)}원`;
+
+    basePriceEl.textContent =
+      `${formatPrice(baseTotal)}원`;
+
   }else{
+
     basePriceEl.textContent = '미선택';
   }
 
-  selectedAddonOptions.forEach(option => {
+  state.selectedAddonOptions.forEach(option => {
+
     const subtotal = option.price * option.qty;
+
     addonTotal += subtotal;
 
     const item = document.createElement('div');
+
     item.className = 'selection-summary-item';
+
     item.innerHTML = `
       <div class="left">
         <div class="name">${option.name}</div>
-        <div class="sub">${option.qty}개 (+${formatPrice(option.price)}원)</div>
+
+        <div class="sub">
+          ${option.qty}개
+          (+${formatPrice(option.price)}원)
+        </div>
       </div>
+
       <div class="right">
-        <strong>${formatPrice(subtotal)}원</strong>
-        <button type="button" class="remove-btn" data-remove="${option.name}" aria-label="${option.name} 제거">×</button>
+        <strong>
+          ${formatPrice(subtotal)}원
+        </strong>
+
+        <button
+          type="button"
+          class="remove-btn"
+          data-remove="${option.name}"
+          aria-label="${option.name} 제거"
+        >
+          ×
+        </button>
       </div>
     `;
+
     list.appendChild(item);
   });
 
-  addonPriceEl.textContent = `${formatPrice(addonTotal)}원`;
-  totalPriceEl.textContent = `${formatPrice(baseTotal + addonTotal)}원`;
+  addonPriceEl.textContent =
+    `${formatPrice(addonTotal)}원`;
+
+  totalPriceEl.textContent =
+    `${formatPrice(baseTotal + addonTotal)}원`;
 }
 
+/* =========================
+   FORM
+========================= */
+
 function autoResizeTextarea(){
-  const textarea = document.getElementById('inputText');
+
+  const textarea = elements.textarea();
+
   if(!textarea) return;
+
   textarea.style.height = 'auto';
-  textarea.style.height = textarea.scrollHeight + 'px';
+
+  textarea.style.height =
+    textarea.scrollHeight + 'px';
 }
 
 function updateFormText(){
-  const textarea = document.getElementById('inputText');
+
+  const textarea = elements.textarea();
+
   const lines = textarea.value.split('\n');
 
-  const baseText = selectedBaseOption
-    ? `7. 버츄얼 패키지 : ${selectedBaseOption.name} (+${formatPrice(selectedBaseOption.price)}원)`
+  const baseText = state.selectedBaseOption
+    ? `7. 버츄얼 패키지 : ${state.selectedBaseOption.name} (+${formatPrice(state.selectedBaseOption.price)}원)`
     : '7. 버츄얼 패키지 : ';
 
-  const addonText = selectedAddonOptions.length
-    ? `8. 추가 옵션 : ${selectedAddonOptions.map(o => `${o.name} x${o.qty} (+${formatPrice(o.price * o.qty)}원)`).join(', ')}`
+  const addonText = state.selectedAddonOptions.length
+    ? `8. 추가 옵션 : ${
+        state.selectedAddonOptions
+          .map(option =>
+            `${option.name} x${option.qty} (+${formatPrice(option.price * option.qty)}원)`
+          )
+          .join(', ')
+      }`
     : '8. 추가 옵션 : ';
 
-  replaceLineByPrefix(lines, '7. 버츄얼 패키지', baseText);
-  replaceLineByPrefix(lines, '8. 추가 옵션', addonText);
+  replaceLineByPrefix(
+    lines,
+    '7. 버츄얼 패키지',
+    baseText
+  );
+
+  replaceLineByPrefix(
+    lines,
+    '8. 추가 옵션',
+    addonText
+  );
+
   textarea.value = lines.join('\n');
+
   autoResizeTextarea();
 }
 
+/* =========================
+   UI
+========================= */
+
 function updateUI(){
-  if(enforceAddonRules()){
-    // dependent add-ons removed; proceed with refreshed state
-  }
+
+  enforceAddonRules();
+
   updateSelectionSummary();
+
   updateFormText();
 }
 
-function toggleBaseOption(el, name, price){
-  const isSame = selectedBaseOption && selectedBaseOption.name === name;
+/* =========================
+   BASE OPTION
+========================= */
 
-  getBaseOptionItems().forEach(item => item.classList.remove('active'));
+function toggleBaseOption(el, name, price){
+
+  const isSame =
+    state.selectedBaseOption &&
+    state.selectedBaseOption.name === name;
+
+  getBaseOptionItems()
+    .forEach(item =>
+      item.classList.remove('active')
+    );
 
   if(isSame){
-    selectedBaseOption = null;
+
+    state.selectedBaseOption = null;
+
     el.classList.remove('active');
+
   }else{
-    selectedBaseOption = { name, price };
+
+    state.selectedBaseOption = {
+      name,
+      price
+    };
+
     el.classList.add('active');
   }
 
   updateUI();
 }
 
+/* =========================
+   ADDON
+========================= */
+
 function toggleAddonOption(el, name, price){
-  const idx = selectedAddonOptions.findIndex(o => o.name === name);
 
-  if(idx > -1){
-    selectedAddonOptions.splice(idx, 1);
+  const index =
+    state.selectedAddonOptions.findIndex(
+      option => option.name === name
+    );
+
+  if(index > -1){
+
+    state.selectedAddonOptions.splice(index, 1);
+
     el.classList.remove('active');
+
     updateUI();
+
     return;
   }
 
-  if(requiresFoldedArm(name) && !hasFoldedArmSelected()){
-    alert("추가 팔 파츠’를 먼저 체크해야 선택 가능한 옵션이에요!,,⁃ ⩊ ⁃,,");
+  if(requiresFoldedArm(name) &&
+    !hasFoldedArmSelected()){
+
+    alert(
+      "추가 팔 파츠’를 먼저 체크해야 선택 가능한 옵션이에요!,,⁃ ⩊ ⁃,,"
+    );
+
     return;
   }
 
-  selectedAddonOptions.push({ name, price, qty: 1 });
+  state.selectedAddonOptions.push({
+    name,
+    price,
+    qty:1
+  });
+
   el.classList.add('active');
+
   setQtyValue(name, 1);
+
   updateUI();
 }
 
 function changeAddonQty(name, delta){
-  const option = selectedAddonOptions.find(o => o.name === name);
+
+  const option =
+    state.selectedAddonOptions.find(
+      option => option.name === name
+    );
+
   if(!option) return;
 
   option.qty += delta;
 
   if(option.qty <= 0){
-    selectedAddonOptions = selectedAddonOptions.filter(o => o.name !== name);
+
+    state.selectedAddonOptions =
+      state.selectedAddonOptions.filter(
+        option => option.name !== name
+      );
+
     const item = findAddonElement(name);
-    if(item) item.classList.remove('active');
+
+    if(item){
+      item.classList.remove('active');
+    }
+
   }else{
+
     option.qty = Math.max(1, option.qty);
+
     setQtyValue(name, option.qty);
-    const item = findAddonElement(name);
-    if(item) item.classList.add('active');
   }
 
   updateUI();
 }
 
 function removeAddon(name){
-  selectedAddonOptions = selectedAddonOptions.filter(o => o.name !== name);
+
+  state.selectedAddonOptions =
+    state.selectedAddonOptions.filter(
+      option => option.name !== name
+    );
+
   const item = findAddonElement(name);
-  if(item) item.classList.remove('active');
+
+  if(item){
+    item.classList.remove('active');
+  }
+
   updateUI();
 }
 
-function copyText() {
-  const textarea = document.getElementById('inputText');
+/* =========================
+   COPY
+========================= */
+
+function copyText(){
+
+  const textarea = elements.textarea();
+
   const text = textarea.value;
 
-  function finishCopy(){
-    alert('복사 완료! 문의란에 붙여넣어 주세요 ( ◜ᴗ◝ )♡');
-  }
+  const finishCopy = () => {
+    alert(
+      '복사 완료! 문의란에 붙여넣어 주세요 ( ◜ᴗ◝ )♡'
+    );
+  };
 
-  if(navigator.clipboard && window.isSecureContext){
-    navigator.clipboard.writeText(text).then(finishCopy).catch(() => fallbackCopy(text));
+  if(navigator.clipboard &&
+    window.isSecureContext){
+
+    navigator.clipboard
+      .writeText(text)
+      .then(finishCopy)
+      .catch(() => fallbackCopy(text));
+
   }else{
+
     fallbackCopy(text);
   }
 
   function fallbackCopy(value){
-    const temp = document.createElement('textarea');
+
+    const temp =
+      document.createElement('textarea');
+
     temp.value = value;
+
     temp.setAttribute('readonly', '');
+
     temp.style.position = 'fixed';
+
     temp.style.left = '-9999px';
-    temp.style.top = '0';
+
     document.body.appendChild(temp);
-    temp.focus();
+
     temp.select();
-    temp.setSelectionRange(0, temp.value.length);
 
     try{
+
       document.execCommand('copy');
+
       finishCopy();
-    }catch(err){
-      alert('복사가 안 될 경우, 텍스트를 꾹 눌러 복사해 주세요 💗');
+
+    }catch(error){
+
+      alert(
+        '복사가 안 될 경우 텍스트를 꾹 눌러 복사해 주세요 💗'
+      );
+
     }finally{
+
       temp.remove();
     }
   }
 }
 
-let current = 0;
-const images = [
+/* =========================
+   GALLERY
+========================= */
+
+const sampleImages = [
   'sina_sample_collage.png',
   'rararu_sample_collage.png',
   'koya_sample_collage.png',
@@ -1270,56 +1500,18 @@ const images = [
   'B_sample_collage.png'
 ];
 
-function showGallery(index){
-  current = index;
-  const img = document.getElementById('galleryImg');
-  img.src = images[current];
-  updateSampleThumbBorder();
-}
-
-function selectSample(index){
-  showGallery(index);
-}
-
-function updateSampleThumbBorder(){
-  const thumbs = document.querySelectorAll('#sampleThumbGrid img');
-  thumbs.forEach((thumb, index) => {
-    thumb.style.border = index === current ? '2px solid var(--pink-deep)' : '2px solid transparent';
-  });
-}
-
-let faceCurrent = 0;
 const faceImages = [
   'raruka_face_types.png',
   'koya_face_9types.png',
   'sia_face_types.png'
 ];
+
 const faceDescriptions = [
   '라루카님 표정 샘플',
   '네무키 코야님 표정 샘플',
   '시로유키 시아님 1.0 표정 샘플'
 ];
 
-function showFace(index){
-  faceCurrent = index;
-  document.getElementById('faceGallery').src = faceImages[faceCurrent];
-  document.getElementById('faceDesc').innerHTML = faceDescriptions[faceCurrent];
-  updateFaceDots();
-}
-
-function nextFace(){
-  showFace((faceCurrent + 1) % faceImages.length);
-}
-
-function prevFace(){
-  showFace((faceCurrent - 1 + faceImages.length) % faceImages.length);
-}
-
-function updateFaceDots(){
-  document.getElementById('faceDots').innerText = faceImages.map((_, i) => i === faceCurrent ? '●' : '○').join(' ');
-}
-
-let styleCurrent = 0;
 const styleImages = [
   'style_01.png',
   'style_02.png',
@@ -1327,49 +1519,145 @@ const styleImages = [
   'style_04.png'
 ];
 
+function showGallery(index){
+
+  state.currentSample = index;
+
+  document.getElementById('galleryImg').src =
+    sampleImages[index];
+
+  updateSampleThumbBorder();
+}
+
+function updateSampleThumbBorder(){
+
+  document
+    .querySelectorAll('#sampleThumbGrid img')
+    .forEach((thumb, index) => {
+
+      thumb.style.border =
+        index === state.currentSample
+          ? '2px solid var(--pink-deep)'
+          : '2px solid transparent';
+    });
+}
+
+function showFace(index){
+
+  state.currentFace = index;
+
+  document.getElementById('faceGallery').src =
+    faceImages[index];
+
+  document.getElementById('faceDesc').innerHTML =
+    faceDescriptions[index];
+
+  updateFaceDots();
+}
+
+function nextFace(){
+  showFace(
+    (state.currentFace + 1)
+    % faceImages.length
+  );
+}
+
+function prevFace(){
+  showFace(
+    (state.currentFace - 1 + faceImages.length)
+    % faceImages.length
+  );
+}
+
+function updateFaceDots(){
+
+  document.getElementById('faceDots')
+    .innerText = faceImages
+      .map((_, i) =>
+        i === state.currentFace ? '●' : '○'
+      )
+      .join(' ');
+}
+
 function showStyle(index){
-  styleCurrent = index;
-  document.getElementById('styleGallery').src = styleImages[styleCurrent];
+
+  state.currentStyle = index;
+
+  document.getElementById('styleGallery').src =
+    styleImages[index];
+
   updateStyleDots();
 }
 
 function nextStyle(){
-  showStyle((styleCurrent + 1) % styleImages.length);
+  showStyle(
+    (state.currentStyle + 1)
+    % styleImages.length
+  );
 }
 
 function prevStyle(){
-  showStyle((styleCurrent - 1 + styleImages.length) % styleImages.length);
+  showStyle(
+    (state.currentStyle - 1 + styleImages.length)
+    % styleImages.length
+  );
 }
 
 function updateStyleDots(){
-  document.getElementById('styleDots').innerText = styleImages.map((_, i) => i === styleCurrent ? '●' : '○').join(' ');
+
+  document.getElementById('styleDots')
+    .innerText = styleImages
+      .map((_, i) =>
+        i === state.currentStyle ? '●' : '○'
+      )
+      .join(' ');
 }
 
-preloadImages(images);
+/* =========================
+   INIT
+========================= */
+
+preloadImages(sampleImages);
 preloadImages(faceImages);
 preloadImages(styleImages);
 
-document.addEventListener('click', (event) => {
-  const btn = event.target.closest('.remove-btn');
-  if(btn){
-    removeAddon(btn.dataset.remove);
+document.addEventListener('click', event => {
+
+  const removeBtn =
+    event.target.closest('.remove-btn');
+
+  if(removeBtn){
+
+    removeAddon(removeBtn.dataset.remove);
   }
 });
 
-document.addEventListener('DOMContentLoaded', () => {
-  showGallery(0);
-  showFace(0);
-  showStyle(0);
-  updateUI();
+document.addEventListener(
+  'DOMContentLoaded',
+  () => {
 
-  const textarea = document.getElementById('inputText');
-  if(textarea){
-    autoResizeTextarea();
-    textarea.addEventListener('input', autoResizeTextarea);
+    showGallery(0);
+
+    showFace(0);
+
+    showStyle(0);
+
+    updateUI();
+
+    const textarea = elements.textarea();
+
+    if(textarea){
+
+      autoResizeTextarea();
+
+      textarea.addEventListener(
+        'input',
+        autoResizeTextarea
+      );
+    }
   }
-});
+);
+
 </script>
-
-
 </body>
 </html>
